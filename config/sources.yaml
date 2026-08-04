@@ -1,22 +1,22 @@
 telegram:
-  - name: source_one
-    username: "@example_channel"
+  - name: example_farsi
+    username: "@example_farsi"
     language: fa
-    enabled: true
+    enabled: false
 
-  - name: source_two
-    username: "@example_channel_2"
+  - name: example_english
+    username: "@example_english"
     language: en
-    enabled: true
+    enabled: false
 
 rss:
-  - name: source_three
+  - name: example_news
     url: "https://example.com/rss"
     language: en
-    enabled: true
+    enabled: false
 
 websites:
-  - name: source_four
+  - name: example_site
     url: "https://example.com"
     language: en
-    enabled: true
+    enabled: false
