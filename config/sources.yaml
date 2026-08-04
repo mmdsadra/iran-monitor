@@ -1,0 +1,22 @@
+telegram:
+  - name: source_one
+    username: "@example_channel"
+    language: fa
+    enabled: true
+
+  - name: source_two
+    username: "@example_channel_2"
+    language: en
+    enabled: true
+
+rss:
+  - name: source_three
+    url: "https://example.com/rss"
+    language: en
+    enabled: true
+
+websites:
+  - name: source_four
+    url: "https://example.com"
+    language: en
+    enabled: true
