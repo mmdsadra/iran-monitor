@@ -8,9 +8,10 @@ import feedparser
 
 from iran_monitor.config.models import RSSSource
 from iran_monitor.models.news import NewsItem
+from iran_monitor.collectors.base import BaseCollector
 
 
-class RSSCollector:
+class RSSCollector(BaseCollector):
     """Collect and normalize news items from an RSS feed."""
 
     def __init__(self, source: RSSSource):
