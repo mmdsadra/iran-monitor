@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-import os
-from datetime import datetime, timezone
+from datetime import timezone
 
 from telethon import TelegramClient
 
@@ -15,80 +14,73 @@ class TelegramCollector(BaseCollector):
 
     def __init__(
         self,
+        client: TelegramClient,
         *,
         source_name: str,
         username: str,
         language: str,
+        limit: int = 100,
     ):
+        self.client = client
         self.source_name = source_name
         self.username = username
         self.language = language
+        self.limit = limit
 
-        api_id = os.getenv("TELEGRAM_API_ID")
-        api_hash = os.getenv("TELEGRAM_API_HASH")
-        session_path = os.getenv(
-            "TELEGRAM_SESSION_PATH",
-            "telegram_sessions/iran_monitor",
-        )
-
-        if not api_id or not api_hash:
-            raise RuntimeError(
-                "TELEGRAM_API_ID and TELEGRAM_API_HASH "
-                "must be set in the environment."
-            )
-
-        self.client = TelegramClient(
-            session_path,
-            int(api_id),
-            api_hash,
-        )
-
-    async def collect(self) -> list[NewsItem]:
-        """Collect recent messages from the configured channel."""
-
+    async def collect(
+        self,
+        *,
+        min_id: int = 0,
+    ) -> list[NewsItem]:
         items: list[NewsItem] = []
 
-        async with self.client:
-            async for message in self.client.iter_messages(
-                self.username,
-                limit=100,
-            ):
-                if not message.message:
-                    continue
+        async for message in self.client.iter_messages(
+            self.username,
+            limit=self.limit,
+            min_id=min_id,
+            reverse=True,
+        ):
+            # Defensive check: never process an old message.
+            if message.id <= min_id:
+                continue
 
-                text = message.message.strip()
+            if not message.message:
+                continue
 
-                published_at = (
-                    message.date.astimezone(timezone.utc)
-                    if message.date
-                    else None
+            text = message.message.strip()
+
+            published_at = None
+
+            if message.date:
+                published_at = message.date.astimezone(
+                    timezone.utc
                 )
 
-                message_url = self._build_message_url(
-                    message.id
-                )
+            message_url = self._build_message_url(
+                message.id
+            )
 
-                content_hash = self._make_hash(
+            content_hash = self._make_hash(
+                text=text,
+                message_id=message.id,
+            )
+
+            items.append(
+                NewsItem(
+                    id=content_hash,
+                    source_name=self.source_name,
+                    source_type="telegram",
+                    language=self.language,
+                    title=None,
                     text=text,
-                    message_id=message.id,
+                    url=message_url,
+                    published_at=published_at,
+                    content_hash=content_hash,
+                    raw_data={
+                        "message_id": message.id,
+                    },
                 )
-
-                items.append(
-                    NewsItem(
-                        id=content_hash,
-                        source_name=self.source_name,
-                        source_type="telegram",
-                        language=self.language,
-                        title=None,
-                        text=text,
-                        url=message_url,
-                        published_at=published_at,
-                        content_hash=content_hash,
-                        raw_data={
-                            "message_id": message.id,
-                        },
-                    )
-                )
+            )
 
         return items
 
@@ -106,6 +98,18 @@ class TelegramCollector(BaseCollector):
         message_id: int,
     ) -> str:
         raw = f"{message_id}|{text}"
+
         return hashlib.sha256(
             raw.encode("utf-8")
         ).hexdigest()
+    
+    async def get_latest_message_id(self) -> int | None:
+        message = await self.client.get_messages(
+            self.username,
+            limit=1,
+        )
+
+        if not message:
+            return None
+
+        return message[0].id
