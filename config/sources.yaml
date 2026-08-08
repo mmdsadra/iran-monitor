@@ -10,10 +10,10 @@ telegram:
     enabled: false
 
 rss:
-  - name: example_news
-    url: "https://example.com/rss"
-    language: en
-    enabled: false
+  - name: bbc_persian
+    url: "https://feeds.bbci.co.uk/persian/rss.xml"
+    language: fa
+    enabled: true
 
 websites:
   - name: example_site
