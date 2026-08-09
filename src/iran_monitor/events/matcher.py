@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 
 from iran_monitor.events.model import Event
@@ -18,6 +18,10 @@ class EventMatcher:
 
     Matching intentionally uses explainable signals rather than an embedding model:
     event type, geographic overlap, temporal proximity, and description tokens.
+
+    Geographic and temporal conflicts are hard rejection gates when both sides
+    provide the corresponding information. This prevents a strong text overlap
+    from matching two clearly different real-world events.
     """
 
     def __init__(
@@ -56,12 +60,17 @@ class EventMatcher:
         if claim.event_type != event.event_type:
             return 0.0
 
-        score = 0.50  # exact event type
-
         geo = self._geographic_score(claim, event)
         time = self._temporal_score(claim.occurred_at, event.occurred_at)
+
+        # If both sides know the location/time, a contradiction is a hard
+        # mismatch rather than merely a lower confidence score.
+        if geo < 0.0 or time < 0.0:
+            return 0.0
+
         text = self._text_score(claim.description, event.description)
 
+        score = 0.50  # exact event type
         score += 0.20 * geo
         score += 0.20 * time
         score += 0.10 * text
@@ -71,17 +80,21 @@ class EventMatcher:
         claim_city = self._normalize(claim.city)
         event_city = self._normalize(event.city)
         if claim_city and event_city:
-            return 1.0 if claim_city == event_city else 0.0
+            return 1.0 if claim_city == event_city else -1.0
 
         claim_country = self._normalize(claim.country)
         event_country = self._normalize(event.country)
         if claim_country and event_country:
-            return 1.0 if claim_country == event_country else 0.0
+            return 1.0 if claim_country == event_country else -1.0
 
         claim_location = self._normalize(claim.location_text)
         event_location = self._normalize(event.location_text)
         if claim_location and event_location:
-            return 1.0 if claim_location in event_location or event_location in claim_location else 0.0
+            return (
+                1.0
+                if claim_location in event_location or event_location in claim_location
+                else -1.0
+            )
 
         return 0.0
 
@@ -97,7 +110,7 @@ class EventMatcher:
         event_time = self._aware_utc(event_time)
         hours = abs((claim_time - event_time).total_seconds()) / 3600.0
         if hours > self.time_window_hours:
-            return 0.0
+            return -1.0
         return 1.0 - (hours / self.time_window_hours)
 
     @staticmethod
@@ -129,4 +142,4 @@ class EventMatcher:
     def _aware_utc(value: datetime) -> datetime:
         if value.tzinfo is None:
             return value
-        return value.astimezone(__import__("datetime").timezone.utc).replace(tzinfo=None)
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
