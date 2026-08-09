@@ -70,15 +70,9 @@ class EventRepository:
                 )
                 """
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_occurred_at ON events(occurred_at)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_verification ON events(verification)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_occurred_at ON events(occurred_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_verification ON events(verification)")
 
     def save(self, event: Event) -> None:
         """Insert or fully replace an event and its child records."""
@@ -105,26 +99,15 @@ class EventRepository:
                     verification = excluded.verification
                 """,
                 (
-                    event.id,
-                    event.event_type.value,
-                    event.title,
-                    event.description,
-                    event.location_text,
-                    event.country,
-                    event.city,
-                    event.latitude,
-                    event.longitude,
-                    event.occurred_at.isoformat() if event.occurred_at else None,
-                    event.severity,
-                    event.confidence,
-                    event.verification.value,
+                    event.id, event.event_type.value, event.title, event.description,
+                    event.location_text, event.country, event.city, event.latitude,
+                    event.longitude, event.occurred_at.isoformat() if event.occurred_at else None,
+                    event.severity, event.confidence, event.verification.value,
                 ),
             )
-
             conn.execute("DELETE FROM event_entities WHERE event_id = ?", (event.id,))
             conn.execute("DELETE FROM event_sources WHERE event_id = ?", (event.id,))
             conn.execute("DELETE FROM event_evidence WHERE event_id = ?", (event.id,))
-
             conn.executemany(
                 "INSERT INTO event_entities (event_id, name, entity_type) VALUES (?, ?, ?)",
                 [(event.id, entity.name, entity.entity_type) for entity in event.entities],
@@ -140,13 +123,8 @@ class EventRepository:
                 ) VALUES (?, ?, ?, ?, ?)
                 """,
                 [
-                    (
-                        event.id,
-                        evidence.source_id,
-                        evidence.evidence_type.value,
-                        evidence.description,
-                        evidence.confidence,
-                    )
+                    (event.id, evidence.source_id, evidence.evidence_type.value,
+                     evidence.description, evidence.confidence)
                     for evidence in event.evidence
                 ],
             )
@@ -154,26 +132,17 @@ class EventRepository:
     def get(self, event_id: str) -> Event | None:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM events WHERE id = ?", (event_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
             if row is None:
                 return None
-
             entities = conn.execute(
-                "SELECT name, entity_type FROM event_entities WHERE event_id = ?",
-                (event_id,),
+                "SELECT name, entity_type FROM event_entities WHERE event_id = ?", (event_id,)
             ).fetchall()
             sources = conn.execute(
-                "SELECT source_id FROM event_sources WHERE event_id = ?",
-                (event_id,),
+                "SELECT source_id FROM event_sources WHERE event_id = ?", (event_id,)
             ).fetchall()
             evidence_rows = conn.execute(
-                """
-                SELECT source_id, evidence_type, description, confidence
-                FROM event_evidence
-                WHERE event_id = ?
-                """,
+                "SELECT source_id, evidence_type, description, confidence FROM event_evidence WHERE event_id = ?",
                 (event_id,),
             ).fetchall()
 
@@ -181,12 +150,8 @@ class EventRepository:
         payload["entities"] = [EventEntity(**dict(item)) for item in entities]
         payload["source_ids"] = [item["source_id"] for item in sources]
         payload["evidence"] = [
-            Evidence(
-                source_id=item["source_id"],
-                evidence_type=item["evidence_type"],
-                description=item["description"],
-                confidence=item["confidence"],
-            )
+            Evidence(source_id=item["source_id"], evidence_type=item["evidence_type"],
+                     description=item["description"], confidence=item["confidence"])
             for item in evidence_rows
         ]
         return Event.model_validate(payload)
@@ -196,8 +161,15 @@ class EventRepository:
             return []
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT id FROM events ORDER BY occurred_at DESC, id DESC LIMIT ?",
-                (limit,),
+                "SELECT id FROM events ORDER BY occurred_at DESC, id DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [event for row in rows if (event := self.get(row[0])) is not None]
+
+    def list_all(self) -> list[Event]:
+        """Return every persisted event, newest first."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id FROM events ORDER BY occurred_at DESC, id DESC"
             ).fetchall()
         return [event for row in rows if (event := self.get(row[0])) is not None]
 
