@@ -27,10 +27,6 @@ class LLMConfig:
 
         provider = os.getenv("IRAN_MONITOR_LLM_PROVIDER", "openai").lower()
         defaults = {
-            "gemini": (
-                "https://generativelanguage.googleapis.com/v1beta/openai",
-                "gemini-2.5-flash",
-            ),
             "openai": ("https://api.openai.com/v1", "gpt-4o-mini"),
             "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
         }
