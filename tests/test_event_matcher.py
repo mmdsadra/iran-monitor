@@ -90,3 +90,36 @@ def test_best_candidate_is_selected(tmp_path):
 
     assert match is not None
     assert match.event.id == "strong"
+
+
+def test_location_conflict_is_hard_mismatch_even_with_matching_text(tmp_path):
+    repo = EventRepository(str(tmp_path / "events.db"))
+    repo.save(
+        make_event().model_copy(
+            update={"description": "Explosion reported in Tehran near airport"}
+        )
+    )
+    matcher = EventMatcher(repo)
+
+    match = matcher.find_match(make_claim(city="Tehran", location_text="Tehran airport"))
+
+    assert match is None
+
+
+def test_time_conflict_is_hard_mismatch_even_with_matching_text(tmp_path):
+    repo = EventRepository(str(tmp_path / "events.db"))
+    repo.save(
+        make_event().model_copy(
+            update={"description": "Explosion reported in Isfahan near airport"}
+        )
+    )
+    matcher = EventMatcher(repo)
+
+    match = matcher.find_match(
+        make_claim(
+            occurred_at=datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc),
+            description="Explosion reported in Isfahan near airport",
+        )
+    )
+
+    assert match is None
