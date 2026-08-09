@@ -1,0 +1,73 @@
+from datetime import datetime
+from enum import Enum
+
+from pydantic import BaseModel, Field
+
+
+class EventType(str, Enum):
+    EXPLOSION = "explosion"
+    FIRE = "fire"
+    STRIKE = "strike"
+    ATTACK = "attack"
+    PROTEST = "protest"
+    MILITARY_MOVEMENT = "military_movement"
+    AIRSTRIKE = "airstrike"
+    MISSILE_LAUNCH = "missile_launch"
+    INFRASTRUCTURE_DAMAGE = "infrastructure_damage"
+    CASUALTY = "casualty"
+    OTHER = "other"
+
+
+class VerificationStatus(str, Enum):
+    UNVERIFIED = "unverified"
+    CORROBORATED = "corroborated"
+    VERIFIED = "verified"
+
+
+class EventEntity(BaseModel):
+    name: str
+    entity_type: str
+
+
+class Event(BaseModel):
+    id: str
+
+    event_type: EventType
+
+    title: str | None = None
+    description: str
+
+    # Location
+    location_text: str | None = None
+    country: str | None = None
+    city: str | None = None
+
+    latitude: float | None = None
+    longitude: float | None = None
+
+    # Time
+    occurred_at: datetime | None = None
+
+    # Assessment
+    severity: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+    )
+
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+    )
+
+    verification: VerificationStatus = VerificationStatus.UNVERIFIED
+
+    # Extracted entities
+    entities: list[EventEntity] = Field(default_factory=list)
+
+    # Original evidence / claims
+    evidence: list[str] = Field(default_factory=list)
+
+    # NewsItem IDs supporting this event
+    source_ids: list[str] = Field(default_factory=list)
