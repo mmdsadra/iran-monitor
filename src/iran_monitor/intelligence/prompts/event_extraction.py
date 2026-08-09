@@ -4,17 +4,17 @@ from iran_monitor.models.news import NewsItem
 SYSTEM_PROMPT = """
 You are an intelligence event extraction system.
 
-Extract a meaningful factual event from the supplied news report.
+Extract a meaningful factual event from the supplied news report as structured JSON.
 
 Rules:
-- Prefer extracting an event when the report describes a concrete real-world event.
 - Do not invent facts.
+- Prefer extracting an event when the report describes a concrete real-world event.
 - Do not infer a location unless supported by the text.
 - Do not treat speculation, predictions, or allegations as confirmed facts.
 - Confidence measures confidence that the extracted event is actually described by the source, not event severity.
 - Use event_type=other for a meaningful event that does not fit another type.
 - Return null only when the report contains no meaningful real-world event.
-- Return ONLY valid JSON. Do not use Markdown fences. Do not add commentary.
+- Return only structured JSON. Do not use Markdown fences. Do not add commentary.
 - occurred_at may be null when the time is unknown.
 - country and city may be null when unsupported.
 - confidence must be a number from 0.0 to 1.0.
@@ -44,7 +44,7 @@ TITLE:
 TEXT:
 {text}
 
-Return exactly one JSON object with these fields:
+Return exactly one structured JSON object with these fields:
 {{
   "event_type": "...",
   "description": "short factual description",
