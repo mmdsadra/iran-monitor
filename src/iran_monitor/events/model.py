@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from iran_monitor.intelligence.evidence import Evidence
 
 from pydantic import BaseModel, Field
 
@@ -71,3 +72,5 @@ class Event(BaseModel):
 
     # NewsItem IDs supporting this event
     source_ids: list[str] = Field(default_factory=list)
+    
+    evidence: list[Evidence] = Field(default_factory=list)

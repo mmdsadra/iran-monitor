@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from iran_monitor.events.model import Event, EventType
-
+from iran_monitor.intelligence.evidence import Evidence, EvidenceType
 
 def test_event_creation():
     event = Event(
@@ -100,7 +100,12 @@ def test_event_can_store_claim_evidence():
             )
         ],
         evidence=[
-            "Source reported an explosion in Isfahan."
+            Evidence(
+                source_id="telegram:12345",
+                evidence_type=EvidenceType.DIRECT_REPORT,
+                description="Source reported an explosion in Isfahan.",
+                confidence=0.8,
+            )
         ],
         source_ids=["telegram:12345"],
     )
