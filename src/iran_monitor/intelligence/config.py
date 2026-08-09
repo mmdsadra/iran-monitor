@@ -22,26 +22,25 @@ class LLMConfig:
     @classmethod
     def from_environment(cls) -> "LLMConfig":
         api_key = os.getenv("IRAN_MONITOR_LLM_API_KEY")
-
         if not api_key:
-            raise RuntimeError(
-                "IRAN_MONITOR_LLM_API_KEY is not configured"
-            )
+            raise RuntimeError("IRAN_MONITOR_LLM_API_KEY is not configured")
 
+        provider = os.getenv("IRAN_MONITOR_LLM_PROVIDER", "openai").lower()
+        defaults = {
+            "gemini": (
+                "https://generativelanguage.googleapis.com/v1beta/openai",
+                "gemini-2.5-flash",
+            ),
+            "openai": ("https://api.openai.com/v1", "gpt-4o-mini"),
+            "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+        }
+        if provider not in defaults:
+            raise RuntimeError(f"Unsupported LLM provider: {provider}")
+
+        default_base_url, default_model = defaults[provider]
         return cls(
             api_key=api_key,
-            base_url=os.getenv(
-                "IRAN_MONITOR_LLM_BASE_URL",
-                "https://api.openai.com/v1",
-            ),
-            model=os.getenv(
-                "IRAN_MONITOR_LLM_MODEL",
-                "gpt-4o-mini",
-            ),
-            timeout=float(
-                os.getenv(
-                    "IRAN_MONITOR_LLM_TIMEOUT",
-                    "30",
-                )
-            ),
+            base_url=os.getenv("IRAN_MONITOR_LLM_BASE_URL", default_base_url),
+            model=os.getenv("IRAN_MONITOR_LLM_MODEL", default_model),
+            timeout=float(os.getenv("IRAN_MONITOR_LLM_TIMEOUT", "30")),
         )
