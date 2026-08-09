@@ -1,70 +1,61 @@
 from datetime import datetime, timezone
 
-from iran_monitor.events.model import EventType
-from iran_monitor.intelligence.extractor import MockIntelligenceProvider
-from iran_monitor.intelligence.gate import IntelligenceGate
 from iran_monitor.intelligence.pipeline import IntelligencePipeline
 from iran_monitor.models.news import NewsItem
 
 
-def make_news(
-    item_id: str,
-    text: str,
-    title: str | None = None,
-) -> NewsItem:
+def make_news(text: str) -> NewsItem:
     return NewsItem(
-        id=item_id,
+        id="news-001",
         source_name="test",
         source_type="telegram",
         language="fa",
-        title=title,
         text=text,
         published_at=datetime.now(timezone.utc),
     )
 
 
-def test_pipeline_processes_accepted_news():
-    pipeline = IntelligencePipeline(
-        gate=IntelligenceGate(),
-        provider=MockIntelligenceProvider(),
+class FakeProvider:
+    def __init__(self, result=None):
+        self.result = result
+        self.calls = 0
+
+    def analyze(self, item):
+        self.calls += 1
+        return self.result
+
+
+def test_gambling_is_rejected_before_llm():
+    provider = FakeProvider()
+    pipeline = IntelligencePipeline(provider)
+
+    result = pipeline.process(
+        make_news("ثبت نام کازینو و شرط بندی با جایزه ویژه")
     )
 
-    events = pipeline.process([
-        make_news("1", "گزارش یک رویداد مهم", "خبر"),
-    ])
-
-    assert len(events) == 1
-    assert events[0].id == "event-1"
-    assert events[0].source_ids == ["1"]
+    assert result.status == "rejected"
+    assert provider.calls == 0
 
 
-def test_pipeline_rejects_gambling():
-    pipeline = IntelligencePipeline(
-        gate=IntelligenceGate(),
-        provider=MockIntelligenceProvider(),
+def test_advertisement_is_rejected_before_llm():
+    provider = FakeProvider()
+    pipeline = IntelligencePipeline(provider)
+
+    result = pipeline.process(
+        make_news("همین الان ثبت نام کن و جایزه نقدی بگیر")
     )
 
-    events = pipeline.process([
-        make_news("1", "کازینو و شرط بندی آنلاین", "تبلیغات"),
-    ])
-
-    assert events == []
+    assert result.status == "rejected"
+    assert provider.calls == 0
 
 
-def test_pipeline_processes_multiple_items():
-    pipeline = IntelligencePipeline(
-        gate=IntelligenceGate(),
-        provider=MockIntelligenceProvider(),
+def test_accepted_news_reaches_llm():
+    provider = FakeProvider()
+    pipeline = IntelligencePipeline(provider)
+
+    result = pipeline.process(
+        make_news("گزارش وقوع انفجار در اصفهان")
     )
 
-    events = pipeline.process([
-        make_news("1", "خبر اول"),
-        make_news("2", "خبر دوم"),
-        make_news("3", "پوکر و شرط بندی"),
-    ])
-
-    assert len(events) == 2
-    assert {event.id for event in events} == {
-        "event-1",
-        "event-2",
-    }
+    assert provider.calls == 1
+    assert result.status == "no_event"

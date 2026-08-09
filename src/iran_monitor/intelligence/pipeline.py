@@ -1,27 +1,55 @@
-from iran_monitor.events.model import Event
-from iran_monitor.intelligence.extractor import IntelligenceProvider
+from dataclasses import dataclass
+
+from iran_monitor.intelligence.claims import EventClaim
 from iran_monitor.intelligence.gate import IntelligenceGate
+from iran_monitor.intelligence.providers.openai import OpenAIProvider
 from iran_monitor.models.news import NewsItem
+
+
+@dataclass(frozen=True)
+class IntelligenceResult:
+    news_id: str
+    status: str
+    claim: EventClaim | None = None
+    reason: str | None = None
 
 
 class IntelligencePipeline:
     def __init__(
         self,
-        gate: IntelligenceGate,
-        provider: IntelligenceProvider,
+        provider: OpenAIProvider,
+        gate: IntelligenceGate | None = None,
     ):
-        self.gate = gate
         self.provider = provider
+        self.gate = gate or IntelligenceGate()
 
-    def process(self, items: list[NewsItem]) -> list[Event]:
-        accepted, _ = self.gate.filter(items)
+    def process(self, item: NewsItem) -> IntelligenceResult:
+        decision = self.gate.evaluate(item)
 
-        events: list[Event] = []
+        if not decision.accepted:
+            return IntelligenceResult(
+                news_id=item.id,
+                status="rejected",
+                reason=decision.reason.value if decision.reason else None,
+            )
 
-        for item in accepted:
-            event = self.provider.analyze(item)
+        try:
+            claim = self.provider.analyze(item)
+        except Exception as exc:
+            return IntelligenceResult(
+                news_id=item.id,
+                status="llm_error",
+                reason=str(exc),
+            )
 
-            if event is not None:
-                events.append(event)
+        if claim is None:
+            return IntelligenceResult(
+                news_id=item.id,
+                status="no_event",
+            )
 
-        return events
+        return IntelligenceResult(
+            news_id=item.id,
+            status="accepted",
+            claim=claim,
+        )
