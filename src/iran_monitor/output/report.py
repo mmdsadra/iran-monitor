@@ -4,6 +4,15 @@ from iran_monitor.events.model import Event
 from iran_monitor.output.assessment import SituationAssessment
 
 
+def _utc(value: datetime | None) -> datetime:
+    """Normalize naive/aware datetimes to UTC-aware values for safe sorting."""
+    if value is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def build_report(events: list[Event], assessment: SituationAssessment) -> str:
     """Build the human-readable Persian situation summary."""
     if assessment.overall >= 75:
@@ -15,11 +24,7 @@ def build_report(events: list[Event], assessment: SituationAssessment) -> str:
     else:
         state = "نسبتاً آرام"
 
-    recent = sorted(
-        events,
-        key=lambda e: e.occurred_at or datetime.min.replace(tzinfo=timezone.utc),
-        reverse=True,
-    )[:5]
+    recent = sorted(events, key=lambda e: _utc(e.occurred_at), reverse=True)[:5]
     lines = [
         "🇮🇷 گزارش وضعیت ایران — Iran Monitor",
         f"وضعیت کلی: {state} ({assessment.overall:.0f}/100)",
