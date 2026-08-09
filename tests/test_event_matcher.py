@@ -78,10 +78,14 @@ def test_distant_time_does_not_match(tmp_path):
 
 def test_best_candidate_is_selected(tmp_path):
     repo = EventRepository(str(tmp_path / "events.db"))
-    repo.save(make_event("weak"))
+    repo.save(
+        make_event("weak").model_copy(
+            update={"description": "Explosion reported in Isfahan"}
+        )
+    )
     repo.save(
         make_event("strong").model_copy(
-            update={"description": "Explosion reported in Isfahan city"}
+            update={"description": "Explosion reported in Isfahan near airport"}
         )
     )
     matcher = EventMatcher(repo)
