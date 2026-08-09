@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from iran_monitor.intelligence.claims import EventClaim
 from iran_monitor.intelligence.gate import IntelligenceGate
+from iran_monitor.intelligence.geography import normalize_claim_location
 from iran_monitor.intelligence.providers.openai import OpenAIProvider
 from iran_monitor.models.news import NewsItem
 
@@ -51,5 +52,5 @@ class IntelligencePipeline:
         return IntelligenceResult(
             news_id=item.id,
             status="accepted",
-            claim=claim,
+            claim=normalize_claim_location(claim),
         )
