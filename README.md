@@ -1,4 +1,4 @@
-# Iran Monitor 🇮🇷
+# Iran Monitor
 
 Iran Monitor is a local-first intelligence pipeline for collecting Persian/English news from RSS feeds and Telegram channels, extracting factual claims with an LLM, matching and clustering related events, corroborating evidence, and producing a compact situation report for Telegram.
 
