@@ -1,8 +1,9 @@
 from datetime import datetime
 from enum import Enum
-from iran_monitor.intelligence.evidence import Evidence
 
 from pydantic import BaseModel, Field
+
+from iran_monitor.intelligence.evidence import Evidence
 
 
 class EventType(str, Enum):
@@ -42,7 +43,6 @@ class Event(BaseModel):
     location_text: str | None = None
     country: str | None = None
     city: str | None = None
-
     latitude: float | None = None
     longitude: float | None = None
 
@@ -50,27 +50,15 @@ class Event(BaseModel):
     occurred_at: datetime | None = None
 
     # Assessment
-    severity: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-    )
-
-    confidence: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-    )
-
+    severity: float = Field(default=0.0, ge=0.0, le=1.0)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     verification: VerificationStatus = VerificationStatus.UNVERIFIED
 
     # Extracted entities
     entities: list[EventEntity] = Field(default_factory=list)
 
-    # Original evidence / claims
-    evidence: list[str] = Field(default_factory=list)
+    # Evidence supporting this event
+    evidence: list[Evidence] = Field(default_factory=list)
 
     # NewsItem IDs supporting this event
     source_ids: list[str] = Field(default_factory=list)
-    
-    evidence: list[Evidence] = Field(default_factory=list)
