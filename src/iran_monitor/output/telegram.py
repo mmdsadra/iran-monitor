@@ -1,6 +1,8 @@
+import json
 import os
 from pathlib import Path
 from urllib import request
+from urllib.parse import urlencode
 
 
 class TelegramPublisher:
@@ -19,18 +21,24 @@ class TelegramPublisher:
         return f"https://api.telegram.org/bot{self.token}"
 
     def _post(self, method: str, data: dict[str, str]) -> dict:
-        encoded = request.urlencode(data).encode("utf-8")
+        encoded = urlencode(data).encode("utf-8")
         req = request.Request(
             f"{self.api_base}/{method}",
             data=encoded,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         with request.urlopen(req, timeout=30) as response:
-            return __import__("json").load(response)
+            result = json.load(response)
+        if not result.get("ok"):
+            raise RuntimeError(f"Telegram {method} failed: {result}")
+        return result
 
     def _send_photo(self, path: Path, caption: str | None = None) -> None:
         import mimetypes
         import uuid
+
+        if not path.exists():
+            raise FileNotFoundError(f"Output image does not exist: {path}")
 
         boundary = uuid.uuid4().hex
         body = bytearray()
@@ -57,14 +65,12 @@ class TelegramPublisher:
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
         with request.urlopen(req, timeout=60) as response:
-            result = __import__("json").load(response)
+            result = json.load(response)
             if not result.get("ok"):
                 raise RuntimeError(f"Telegram sendPhoto failed: {result}")
 
     def send_report(self, report: str) -> None:
-        result = self._post("sendMessage", {"chat_id": self.chat_id, "text": report})
-        if not result.get("ok"):
-            raise RuntimeError(f"Telegram sendMessage failed: {result}")
+        self._post("sendMessage", {"chat_id": self.chat_id, "text": report})
 
     def publish(self, report: str, *images: str | Path) -> None:
         for image in images:
