@@ -45,10 +45,13 @@ class OpenAIProvider:
                 timeout=self.config.timeout,
             )
             response.raise_for_status()
-        except httpx.HTTPError as exc:
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:1000]
             raise RuntimeError(
-                "LLM request failed"
+                f"LLM request failed ({exc.response.status_code}): {detail}"
             ) from exc
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"LLM request failed: {exc}") from exc
 
         data = response.json()
 
@@ -56,7 +59,7 @@ class OpenAIProvider:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise InvalidLLMResponse(
-                "LLM response has unexpected structure"
+                f"LLM response has unexpected structure: {data}"
             ) from exc
 
         return parse_event_claim(content)
