@@ -2,8 +2,6 @@ from pathlib import Path
 from typing import Iterable
 
 from iran_monitor.events.model import Event
-from iran_monitor.events.model import EventType
-from iran_monitor.events.model import Event
 from iran_monitor.intelligence.geography import resolve_place
 from iran_monitor.output.assessment import SituationAssessment
 
@@ -13,8 +11,6 @@ NATURAL_EARTH_COUNTRIES = (
     "geojson/ne_50m_admin_0_countries.geojson"
 )
 
-
-# Used only as a graceful fallback if the geographic dataset cannot be loaded.
 FALLBACK_CITIES = {
     "tehran": (51.389, 35.689),
     "isfahan": (51.668, 32.655),
@@ -43,7 +39,6 @@ def _load_real_basemap():
     import geopandas as gpd
 
     world = gpd.read_file(NATURAL_EARTH_COUNTRIES)
-    # Keep the Middle East plus a useful amount of surrounding geography.
     return world.cx[25:75, 10:45]
 
 
@@ -73,8 +68,6 @@ def render_map(events: Iterable[Event], output_path: str | Path) -> Path:
         ax.grid(True, alpha=0.12)
         basemap_ok = True
     except Exception:
-        # Do not make intelligence generation fail because a map dataset is
-        # temporarily unavailable. The fallback is intentionally simple.
         ax.set_xlim(25, 75)
         ax.set_ylim(10, 45)
         ax.set_aspect("equal", adjustable="box")
@@ -90,7 +83,6 @@ def render_map(events: Iterable[Event], output_path: str | Path) -> Path:
         longitude, latitude = coords
         if not (25 <= longitude <= 75 and 10 <= latitude <= 45):
             continue
-
         size = 35 + 220 * max(0.0, min(1.0, event.severity))
         ax.scatter(longitude, latitude, s=size, alpha=0.82, zorder=5)
         label = event.city or event.location_text or event.event_type.value
@@ -101,11 +93,7 @@ def render_map(events: Iterable[Event], output_path: str | Path) -> Path:
         ax.text(50, 27, "No geolocated events yet", ha="center", fontsize=12)
 
     source_note = "Natural Earth 50m country boundaries" if basemap_ok else "Fallback map — Natural Earth unavailable"
-    ax.text(
-        0.01, 0.01,
-        f"Events plotted: {plotted} | {source_note}",
-        transform=ax.transAxes, fontsize=7, alpha=0.65,
-    )
+    ax.text(0.01, 0.01, f"Events plotted: {plotted} | {source_note}", transform=ax.transAxes, fontsize=7, alpha=0.65)
     fig.tight_layout()
     fig.savefig(path, format="jpg", dpi=180, bbox_inches="tight")
     plt.close(fig)
@@ -119,7 +107,6 @@ def render_assessment(assessment: SituationAssessment, output_path: str | Path) 
     path.parent.mkdir(parents=True, exist_ok=True)
     labels = ["War", "Diplomacy", "Protests", "Military", "Infrastructure", "Casualties"]
     values = [assessment.war, assessment.diplomacy, assessment.protests, assessment.military, assessment.infrastructure, assessment.casualties]
-
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.bar(labels, values)
     ax.set_ylim(0, 100)
@@ -141,10 +128,8 @@ def render_pie(assessment: SituationAssessment, output_path: str | Path) -> Path
     path.parent.mkdir(parents=True, exist_ok=True)
     labels = ["War", "Diplomacy", "Protests", "Military", "Infrastructure", "Casualties"]
     values = [assessment.war, assessment.diplomacy, assessment.protests, assessment.military, assessment.infrastructure, assessment.casualties]
-    total = sum(values)
-    if total == 0:
+    if sum(values) == 0:
         labels, values = ["No signal"], [1]
-
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.pie(values, labels=labels, autopct="%1.0f%%", startangle=90)
     ax.set_title("Iran Monitor — Situation Signal Mix")
