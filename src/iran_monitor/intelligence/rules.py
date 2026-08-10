@@ -34,9 +34,20 @@ REGIONAL_CONTEXT_PATTERNS = [
     r"\bgulf of oman\b", r"\bدریای عمان\b", r"\barabian sea\b", r"\bدریای عرب\b",
 ]
 
+PERSIAN_LOCAL_EVENT_PATTERNS = [
+    r"انفجار", r"حمله", r"درگیری", r"شلیک", r"اصابت", r"موشک", r"پهپاد", r"رزمایش",
+    r"آتش.?سوزی", r"تیراندازی", r"اعتراض", r"بازداشت", r"کشته", r"زخمی", r"تلفات",
+    r"پایگاه", r"تأسیسات", r"تاسیسات", r"مرکز صنعتی", r"فرودگاه", r"بندر", r"استان",
+    r"نیروهای مسلح", r"نیروی هوایی", r"نیروی دریایی", r"ارتش", r"سپاه",
+]
+
 
 def _matches(text: str, patterns: list[str]) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def _count_matches(text: str, patterns: list[str]) -> int:
+    return sum(bool(re.search(pattern, text, re.IGNORECASE)) for pattern in patterns)
 
 
 def evaluate_rules(item: NewsItem) -> GateDecision:
@@ -51,8 +62,8 @@ def evaluate_rules(item: NewsItem) -> GateDecision:
     if _matches(text, ADVERTISEMENT_PATTERNS):
         return GateDecision(accepted=False, reason=RejectionReason.ADVERTISEMENT, score=0.90)
 
-    iran_hits = sum(bool(re.search(pattern, text, re.IGNORECASE)) for pattern in IRAN_PATTERNS)
-    regional_hits = sum(bool(re.search(pattern, text, re.IGNORECASE)) for pattern in REGIONAL_CONTEXT_PATTERNS)
+    iran_hits = _count_matches(text, IRAN_PATTERNS)
+    regional_hits = _count_matches(text, REGIONAL_CONTEXT_PATTERNS)
 
     if iran_hits:
         relevance = min(1.0, 0.75 + 0.08 * (iran_hits - 1))
@@ -62,12 +73,16 @@ def evaluate_rules(item: NewsItem) -> GateDecision:
         relevance = min(0.72, 0.45 + 0.10 * (regional_hits - 2))
         return GateDecision(accepted=True, score=1.0, relevance_score=relevance)
 
-    # The Telegram sources configured for Iran Monitor are curated Iranian
-    # news streams. Their short Persian alerts frequently omit the word
-    # "Iran" while still describing a local incident (e.g. "انفجار در...").
-    # Do not throw those away: they are intentionally passed to the LLM,
-    # which performs the finer event/relevance extraction.
-    if item.source_type.lower() == "telegram" and (item.language or "").lower() in {"fa", "fas", "per"}:
+    # Curated Persian Telegram alerts can omit an explicit Iran name. Only
+    # use the fallback when the item is actually Persian and contains a
+    # concrete local/security event signal. This prevents unrelated stories
+    # (e.g. an English Colombia earthquake) from being accepted merely
+    # because their source happens to be Telegram.
+    is_persian = bool(re.search(r"[\u0600-\u06ff]", text)) and (
+        (item.language or "").lower() in {"fa", "fas", "per"}
+    )
+    local_event_hits = _count_matches(text, PERSIAN_LOCAL_EVENT_PATTERNS)
+    if item.source_type.lower() == "telegram" and is_persian and local_event_hits >= 2:
         return GateDecision(accepted=True, score=0.65, relevance_score=0.50)
 
     return GateDecision(
