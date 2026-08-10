@@ -15,8 +15,6 @@ ADVERTISEMENT_PATTERNS = [
     r"فرصت محدود", r"هدیه ویژه", r"درآمد میلیونی", r"واریز کن", r"شارژ کن", r"جایزه نقدی",
 ]
 
-# High-confidence Iranian entities and locations. These deliberately include
-# Persian/English spellings and strategic geography around Iran.
 IRAN_PATTERNS = [
     r"\biran\b", r"\birgc\b", r"\bislamic republic of iran\b", r"\biranian\b",
     r"ایران", r"ایرانی", r"جمهوری اسلامی", r"سپاه پاسداران", r"سپاه", r"ارتش ایران",
@@ -27,8 +25,6 @@ IRAN_PATTERNS = [
     r"\bnatanz\b", r"\bfordow\b", r"\bفردو\b", r"\bnuclear sites? in iran\b",
 ]
 
-# Regional actors/contexts that can materially affect Iran even without the
-# word Iran appearing in a headline.
 REGIONAL_CONTEXT_PATTERNS = [
     r"\bisrael\b", r"\bisraeli\b", r"\bاسرائیل\b", r"\bاسراییل\b",
     r"\bunited states\b", r"\bus military\b", r"\bpentagon\b", r"\bآمریکا\b", r"\bپنتاگون\b",
@@ -58,8 +54,6 @@ def evaluate_rules(item: NewsItem) -> GateDecision:
     iran_hits = sum(bool(re.search(pattern, text, re.IGNORECASE)) for pattern in IRAN_PATTERNS)
     regional_hits = sum(bool(re.search(pattern, text, re.IGNORECASE)) for pattern in REGIONAL_CONTEXT_PATTERNS)
 
-    # One explicit Iran entity is enough. Strategic regional stories need
-    # at least two contextual signals, avoiding unrelated foreign incidents.
     if iran_hits:
         relevance = min(1.0, 0.75 + 0.08 * (iran_hits - 1))
         return GateDecision(accepted=True, score=1.0, relevance_score=relevance)
@@ -67,6 +61,14 @@ def evaluate_rules(item: NewsItem) -> GateDecision:
     if regional_hits >= 2:
         relevance = min(0.72, 0.45 + 0.10 * (regional_hits - 2))
         return GateDecision(accepted=True, score=1.0, relevance_score=relevance)
+
+    # The Telegram sources configured for Iran Monitor are curated Iranian
+    # news streams. Their short Persian alerts frequently omit the word
+    # "Iran" while still describing a local incident (e.g. "انفجار در...").
+    # Do not throw those away: they are intentionally passed to the LLM,
+    # which performs the finer event/relevance extraction.
+    if item.source_type.lower() == "telegram" and (item.language or "").lower() in {"fa", "fas", "per"}:
+        return GateDecision(accepted=True, score=0.65, relevance_score=0.50)
 
     return GateDecision(
         accepted=False,
