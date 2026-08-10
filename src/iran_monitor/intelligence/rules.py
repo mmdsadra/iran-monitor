@@ -41,6 +41,19 @@ PERSIAN_LOCAL_EVENT_PATTERNS = [
     r"نیروهای مسلح", r"نیروی هوایی", r"نیروی دریایی", r"ارتش", r"سپاه",
 ]
 
+# Common Iran-focused Persian news vocabulary. These are intentionally
+# broader than physical-location keywords because Telegram alerts about
+# diplomacy, protests, politics and the economy often contain no city name.
+PERSIAN_IRAN_TOPIC_PATTERNS = [
+    r"مذاکر(?:ه|ات)", r"دیپلماسی", r"تحریم", r"تحریم.?ها", r"برجام", r"هسته.?ای",
+    r"دولت", r"رئیس.?جمهور", r"ریاست.?جمهوری", r"وزارت", r"مجلس", r"نماینده",
+    r"اعتراض(?:ات)?", r"تجمع", r"اعتصاب", r"معیشت", r"اقتصاد", r"تورم", r"ارز", r"دلار",
+    r"انتخابات", r"رأی.?گیری", r"قوه قضائیه", r"دادگستری", r"بازداشت", r"زندانی",
+    r"سپاه", r"ارتش", r"نیروی هوایی", r"نیروی دریایی", r"پدافند", r"موشک", r"پهپاد",
+    r"نفت", r"گاز", r"پتروشیمی", r"برق", r"آب", r"سوخت", r"بنزین", r"خودرو",
+    r"دانشگاه", r"دانشجو", r"معلم", r"کارگر", r"بازنشسته", r"خبرگزاری", r"وزیر",
+]
+
 
 def _matches(text: str, patterns: list[str]) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
@@ -73,17 +86,20 @@ def evaluate_rules(item: NewsItem) -> GateDecision:
         relevance = min(0.72, 0.45 + 0.10 * (regional_hits - 2))
         return GateDecision(accepted=True, score=1.0, relevance_score=relevance)
 
-    # Curated Persian Telegram alerts can omit an explicit Iran name. Only
-    # use the fallback when the item is actually Persian and contains a
-    # concrete local/security event signal. This prevents unrelated stories
-    # (e.g. an English Colombia earthquake) from being accepted merely
-    # because their source happens to be Telegram.
+    # Curated Persian Telegram channels are important primary inputs for
+    # Iran Monitor. Their alerts frequently omit "Iran" and city names,
+    # especially for diplomacy, protests, domestic politics and economic
+    # news. Accept those only when there is an Iran-specific topic signal;
+    # unrelated English/foreign stories still fail the gate.
     is_persian = bool(re.search(r"[\u0600-\u06ff]", text)) and (
         (item.language or "").lower() in {"fa", "fas", "per"}
     )
     local_event_hits = _count_matches(text, PERSIAN_LOCAL_EVENT_PATTERNS)
-    if item.source_type.lower() == "telegram" and is_persian and local_event_hits >= 2:
-        return GateDecision(accepted=True, score=0.65, relevance_score=0.50)
+    topic_hits = _count_matches(text, PERSIAN_IRAN_TOPIC_PATTERNS)
+    if item.source_type.lower() == "telegram" and is_persian:
+        if local_event_hits >= 1 or topic_hits >= 1:
+            relevance = min(0.70, 0.45 + 0.08 * max(local_event_hits, topic_hits))
+            return GateDecision(accepted=True, score=0.75, relevance_score=relevance)
 
     return GateDecision(
         accepted=False,
