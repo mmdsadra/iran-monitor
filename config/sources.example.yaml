@@ -1,0 +1,34 @@
+telegram:
+  # Keep your existing Telegram source(s) here.
+  # - name: example_channel
+  #   username: example_channel
+  #   language: fa
+  #   enabled: true
+
+rss:
+  - name: al_jazeera
+    language: en
+    enabled: true
+    url: https://www.aljazeera.com/xml/rss/all.xml
+
+  - name: cnn_world
+    language: en
+    enabled: true
+    url: http://rss.cnn.com/rss/edition_world.rss
+
+  - name: fox_news_latest
+    language: en
+    enabled: true
+    url: https://moxie.foxnews.com/google-publisher/latest.xml
+
+  - name: mexico_news_daily
+    language: en
+    enabled: true
+    url: https://mexiconewsdaily.com/feed/
+
+  - name: reuters_world
+    language: en
+    enabled: true
+    # Reuters has changed/deprecated some public feeds over time.
+    # Keep this entry only if the feed responds successfully in your network.
+    url: https://feeds.reuters.com/reuters/worldNews
