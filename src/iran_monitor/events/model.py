@@ -17,6 +17,7 @@ class EventType(str, Enum):
     MISSILE_LAUNCH = "missile_launch"
     INFRASTRUCTURE_DAMAGE = "infrastructure_damage"
     CASUALTY = "casualty"
+    DIPLOMACY = "diplomacy"
     OTHER = "other"
 
 
@@ -33,32 +34,18 @@ class EventEntity(BaseModel):
 
 class Event(BaseModel):
     id: str
-
     event_type: EventType
-
     title: str | None = None
     description: str
-
-    # Location
     location_text: str | None = None
     country: str | None = None
     city: str | None = None
     latitude: float | None = None
     longitude: float | None = None
-
-    # Time
     occurred_at: datetime | None = None
-
-    # Assessment
     severity: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     verification: VerificationStatus = VerificationStatus.UNVERIFIED
-
-    # Extracted entities
     entities: list[EventEntity] = Field(default_factory=list)
-
-    # Evidence supporting this event
     evidence: list[Evidence] = Field(default_factory=list)
-
-    # NewsItem IDs supporting this event
     source_ids: list[str] = Field(default_factory=list)
