@@ -12,15 +12,17 @@ def item(text: str, item_id: str) -> NewsItem:
     )
 
 
-def test_filter_separates_noise_from_news():
+def test_filter_separates_iran_news_from_noise():
     items = [
-        item("انفجار در نزدیکی یک مرکز صنعتی گزارش شد", "1"),
+        item("انفجار در نزدیکی یک مرکز صنعتی در ایران گزارش شد", "1"),
         item("همین الان شارژ کن و جایزه بگیر", "2"),
-        item("گزارش جدید درباره مذاکرات منتشر شد", "3"),
+        item("گزارش جدید درباره مذاکرات ایران و آمریکا منتشر شد", "3"),
+        item("A major earthquake damaged infrastructure in Colombia", "4"),
     ]
 
     accepted, rejected = IntelligenceGate().filter(items)
 
     assert len(accepted) == 2
-    assert len(rejected) == 1
-    assert rejected[0].reason == "advertisement"
+    assert len(rejected) == 2
+    assert any(decision.reason == "advertisement" for decision in rejected)
+    assert any(decision.reason == "irrelevant" for decision in rejected)
