@@ -11,6 +11,7 @@ Rules:
 - Read the full title and text before deciding that there is no event.
 - Prefer a concrete real-world event over a general topic or commentary.
 - Security events have priority when explicitly reported: missile launch, airstrike, strike, attack, explosion, military movement, infrastructure damage, or casualties.
+- Diplomacy is a real event category when the report describes a concrete diplomatic action, meeting, negotiation, agreement, statement, threat, or diplomatic contact.
 - If a report describes a missile launch AND a resulting attack/explosion, choose the most specific primary event (normally missile_launch) and preserve the other fact in the description.
 - Do not downgrade a concrete military/security event to `other` merely because the report is brief.
 - Use `other` only for a meaningful event that genuinely does not fit the allowed categories.
@@ -26,14 +27,13 @@ Rules:
 
 Allowed event_type values:
 explosion, fire, strike, attack, protest, military_movement,
-airstrike, missile_launch, infrastructure_damage, casualty, other
+airstrike, missile_launch, infrastructure_damage, casualty, diplomacy, other
 """
 
 
 def build_event_extraction_prompt(item: NewsItem) -> str:
     title = item.title or ""
     text = item.text
-
     return f"""
 Extract the most important factual event from this news item.
 
@@ -52,9 +52,10 @@ TEXT:
 Extraction priorities:
 1. Identify a concrete event, if one is reported.
 2. Prefer the most specific security/military event type when explicitly supported.
-3. Capture the named place in location_text exactly as written when possible.
-4. Keep the description factual and concise; include important related facts from the same incident.
-5. Do not use `other` when one of the allowed specific event types clearly fits.
+3. Use diplomacy only for a concrete diplomatic action, not generic geopolitical discussion.
+4. Capture the named place in location_text exactly as written when possible.
+5. Keep the description factual and concise; include important related facts from the same incident.
+6. Do not use `other` when one of the allowed specific event types clearly fits.
 
 Return exactly one structured JSON object with these fields:
 {{
