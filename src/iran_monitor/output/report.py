@@ -1,11 +1,10 @@
 from datetime import datetime, timezone
 
-from iran_monitor.events.model import Event
+from iran_monitor.events.model import Event, EventType
 from iran_monitor.output.assessment import SituationAssessment
 
 
 def _utc(value: datetime | None) -> datetime:
-    """Normalize naive/aware datetimes to UTC-aware values for safe sorting."""
     if value is None:
         return datetime.min.replace(tzinfo=timezone.utc)
     if value.tzinfo is None:
@@ -14,7 +13,6 @@ def _utc(value: datetime | None) -> datetime:
 
 
 def build_report(events: list[Event], assessment: SituationAssessment) -> str:
-    """Build the human-readable Persian situation summary."""
     if assessment.overall >= 75:
         state = "بحرانی"
     elif assessment.overall >= 50:
@@ -24,7 +22,12 @@ def build_report(events: list[Event], assessment: SituationAssessment) -> str:
     else:
         state = "نسبتاً آرام"
 
-    recent = sorted(events, key=lambda e: _utc(e.occurred_at), reverse=True)[:5]
+    # Prefer concrete security, protest, casualty and diplomatic events over
+    # generic `other` records. Show up to 8 so a busy feed is actually useful.
+    concrete = [e for e in events if e.event_type != EventType.OTHER]
+    candidates = concrete or events
+    recent = sorted(candidates, key=lambda e: (_utc(e.occurred_at), e.severity, e.confidence), reverse=True)[:8]
+
     lines = [
         "🇮🇷 گزارش وضعیت ایران — Iran Monitor",
         f"وضعیت کلی: {state} ({assessment.overall:.0f}/100)",
@@ -40,11 +43,15 @@ def build_report(events: list[Event], assessment: SituationAssessment) -> str:
         "",
         "رویدادهای مهم اخیر:",
     ]
-    for event in recent:
-        location = event.city or event.location_text or "مکان نامشخص"
-        lines.append(
-            f"• {event.event_type.value} — {location} — شدت {event.severity:.0%} — اعتبار {event.confidence:.0%}"
-        )
+
+    if not recent:
+        lines.append("• مورد مهمی در داده‌های فعلی ثبت نشده است.")
+    else:
+        for event in recent:
+            location = event.city or event.location_text or event.country or "مکان نامشخص"
+            lines.append(
+                f"• {event.event_type.value} — {location} — شدت {event.severity:.0%} — اعتبار {event.confidence:.0%}"
+            )
 
     lines.extend([
         "",
