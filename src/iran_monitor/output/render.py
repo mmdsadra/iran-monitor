@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Iterable
 
-from iran_monitor.events.model import Event
+from iran_monitor.events.model import Event, EventType
 from iran_monitor.intelligence.geography import resolve_place
 from iran_monitor.output.assessment import SituationAssessment
 
@@ -17,6 +17,28 @@ FALLBACK_CITIES = {
     "bandar abbas": (56.267, 27.183),
     "sirik": (57.529, 27.115),
     "strait of hormuz": (56.25, 26.567),
+}
+
+MILITARY_TYPES = {
+    EventType.MILITARY_MOVEMENT,
+    EventType.MISSILE_LAUNCH,
+    EventType.AIRSTRIKE,
+    EventType.STRIKE,
+    EventType.ATTACK,
+}
+
+MARKERS = {
+    EventType.MISSILE_LAUNCH: "^",
+    EventType.AIRSTRIKE: "*",
+    EventType.MILITARY_MOVEMENT: "s",
+    EventType.STRIKE: "X",
+    EventType.ATTACK: "P",
+    EventType.EXPLOSION: "o",
+    EventType.PROTEST: "D",
+    EventType.CASUALTY: "v",
+    EventType.INFRASTRUCTURE_DAMAGE: "h",
+    EventType.FIRE: "o",
+    EventType.OTHER: ".",
 }
 
 
@@ -43,8 +65,9 @@ def _load_real_basemap():
 
 
 def render_map(events: Iterable[Event], output_path: str | Path) -> Path:
-    """Render a real Natural Earth country-boundary map with event markers."""
+    """Render a real Middle East map and distinguish military activity."""
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
     events = list(events)
     path = Path(output_path)
@@ -59,23 +82,20 @@ def render_map(events: Iterable[Event], output_path: str | Path) -> Path:
         if not iran.empty:
             iran.plot(ax=ax, alpha=0.08)
             iran.boundary.plot(ax=ax, linewidth=1.6)
-        ax.set_xlim(25, 75)
-        ax.set_ylim(10, 45)
-        ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
-        ax.set_title("Iran Monitor — Middle East Event Map")
-        ax.grid(True, alpha=0.12)
         basemap_ok = True
     except Exception:
-        ax.set_xlim(25, 75)
-        ax.set_ylim(10, 45)
-        ax.set_aspect("equal", adjustable="box")
-        ax.grid(True, alpha=0.12)
-        ax.set_title("Iran Monitor — Event Map (fallback)")
         basemap_ok = False
 
+    ax.set_xlim(25, 75)
+    ax.set_ylim(10, 45)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title("Iran Monitor — Middle East Situation & Military Activity")
+    ax.grid(True, alpha=0.12)
+
     plotted = 0
+    military_plotted = 0
     for event in events:
         coords = _event_coordinates(event)
         if coords is None:
@@ -83,17 +103,47 @@ def render_map(events: Iterable[Event], output_path: str | Path) -> Path:
         longitude, latitude = coords
         if not (25 <= longitude <= 75 and 10 <= latitude <= 45):
             continue
-        size = 35 + 220 * max(0.0, min(1.0, event.severity))
-        ax.scatter(longitude, latitude, s=size, alpha=0.82, zorder=5)
+
+        is_military = event.event_type in MILITARY_TYPES
+        size = 65 + 260 * max(0.0, min(1.0, event.severity)) if is_military else 30 + 160 * max(0.0, min(1.0, event.severity))
+        marker = MARKERS.get(event.event_type, "o")
+        ax.scatter(
+            longitude,
+            latitude,
+            s=size,
+            marker=marker,
+            alpha=0.88,
+            linewidths=0.8,
+            zorder=5 if is_military else 4,
+        )
         label = event.city or event.location_text or event.event_type.value
+        if is_military:
+            label = f"{label} [{event.event_type.value}]"
+            military_plotted += 1
         ax.annotate(label, (longitude, latitude), xytext=(5, 5), textcoords="offset points", fontsize=7, zorder=6)
         plotted += 1
+
+    legend_items = [
+        Line2D([0], [0], marker=MARKERS[EventType.MISSILE_LAUNCH], linestyle="None", label="Missile launch", markersize=9),
+        Line2D([0], [0], marker=MARKERS[EventType.AIRSTRIKE], linestyle="None", label="Airstrike", markersize=9),
+        Line2D([0], [0], marker=MARKERS[EventType.MILITARY_MOVEMENT], linestyle="None", label="Military movement", markersize=8),
+        Line2D([0], [0], marker=MARKERS[EventType.STRIKE], linestyle="None", label="Strike", markersize=9),
+        Line2D([0], [0], marker=MARKERS[EventType.PROTEST], linestyle="None", label="Protest", markersize=8),
+    ]
+    ax.legend(handles=legend_items, loc="lower left", fontsize=8, framealpha=0.9)
 
     if plotted == 0:
         ax.text(50, 27, "No geolocated events yet", ha="center", fontsize=12)
 
     source_note = "Natural Earth 50m country boundaries" if basemap_ok else "Fallback map — Natural Earth unavailable"
-    ax.text(0.01, 0.01, f"Events plotted: {plotted} | {source_note}", transform=ax.transAxes, fontsize=7, alpha=0.65)
+    ax.text(
+        0.01,
+        0.01,
+        f"Events plotted: {plotted} | Military signals: {military_plotted} | {source_note}",
+        transform=ax.transAxes,
+        fontsize=7,
+        alpha=0.65,
+    )
     fig.tight_layout()
     fig.savefig(path, format="jpg", dpi=180, bbox_inches="tight")
     plt.close(fig)
