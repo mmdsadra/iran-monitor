@@ -18,6 +18,9 @@ from iran_monitor.storage.events import EventRepository
 from iran_monitor.storage.sqlite import SQLiteStorage
 
 
+DEFAULT_SOURCE_LIMIT = 150
+
+
 def process_items(
     items: list[NewsItem],
     intelligence: IntelligencePipeline,
@@ -55,17 +58,17 @@ async def collect_telegram(config, storage: SQLiteStorage) -> list[NewsItem]:
                 source_name=source.name,
                 username=source.username,
                 language=source.language,
-                limit=50,
+                limit=DEFAULT_SOURCE_LIMIT,
             )
             last_id = storage.get_last_message_id(source.name)
-            if last_id is None:
-                latest_id = await collector.get_latest_message_id()
-                if latest_id is not None:
-                    storage.update_source_state(source.name, "telegram", latest_id)
-                continue
 
-            new_items = await collector.collect(min_id=last_id)
+            # First run: deliberately inspect recent history instead of only
+            # recording the newest message. This gives intelligence enough
+            # context to build a useful initial event picture.
+            min_id = last_id or 0
+            new_items = await collector.collect(min_id=min_id)
             items.extend(new_items)
+
             if new_items:
                 newest_id = max(item.raw_data["message_id"] for item in new_items)
                 storage.update_source_state(source.name, "telegram", newest_id)
@@ -77,7 +80,7 @@ def collect_rss(config) -> list[NewsItem]:
     items: list[NewsItem] = []
     for source in config.rss:
         if source.enabled:
-            items.extend(RSSCollector(source).collect())
+            items.extend(RSSCollector(source).collect()[:DEFAULT_SOURCE_LIMIT])
     return items
 
 
@@ -86,7 +89,15 @@ def main() -> None:
     parser.add_argument("--publish", action="store_true", help="publish the generated feed to Telegram")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--sources", default="config/local/sources.yaml")
+    parser.add_argument(
+        "--source-limit",
+        type=int,
+        default=DEFAULT_SOURCE_LIMIT,
+        help="maximum recent items inspected per source (default: 150)",
+    )
     args = parser.parse_args()
+    if args.source_limit < 1:
+        parser.error("--source-limit must be positive")
 
     load_environment()
     config = load_sources(args.sources)
