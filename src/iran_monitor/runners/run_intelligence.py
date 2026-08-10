@@ -21,36 +21,60 @@ from iran_monitor.storage.sqlite import SQLiteStorage
 DEFAULT_SOURCE_LIMIT = 150
 
 
-def process_items(items: list[NewsItem], intelligence: IntelligencePipeline, events: EventIntelligencePipeline) -> tuple[int, int, list]:
+def process_items(items: list[NewsItem], intelligence: IntelligencePipeline, events: EventIntelligencePipeline) -> tuple[int, int, dict[str, int]]:
     accepted = 0
     created_or_merged = 0
-    results = []
+    stats = {"rejected": 0, "no_event": 0, "llm_error": 0}
+
     for item in items:
         result = intelligence.process(item)
+
         if result.status != "accepted" or result.claim is None:
+            stats[result.status] = stats.get(result.status, 0) + 1
             continue
+
         accepted += 1
         event_result = events.process(result.claim)
         created_or_merged += 1
-        results.append(event_result)
-    return accepted, created_or_merged, results
+
+    return accepted, created_or_merged, stats
 
 
-async def collect_telegram(config, storage: SQLiteStorage, limit: int) -> list[NewsItem]:
+async def collect_telegram(
+    config,
+    storage: SQLiteStorage,
+    limit: int,
+    *,
+    reprocess: bool = False,
+) -> list[NewsItem]:
     sources = [source for source in config.telegram if source.enabled]
     if not sources:
         return []
+
     client = create_telegram_client()
     items: list[NewsItem] = []
+
     async with client:
         for source in sources:
-            collector = TelegramCollector(client, source_name=source.name, username=source.username, language=source.language, limit=limit)
-            last_id = storage.get_last_message_id(source.name)
-            new_items = await collector.collect(min_id=last_id or 0)
+            collector = TelegramCollector(
+                client,
+                source_name=source.name,
+                username=source.username,
+                language=source.language,
+                limit=limit,
+            )
+
+            # Normal monitoring is incremental. Backfill/reprocess mode
+            # intentionally ignores source_state so --source-limit means
+            # "latest N messages from every source".
+            last_id = 0 if reprocess else (storage.get_last_message_id(source.name) or 0)
+            new_items = await collector.collect(min_id=last_id)
             items.extend(new_items)
-            if new_items:
+
+            if new_items and not reprocess:
                 newest_id = max(item.raw_data["message_id"] for item in new_items)
                 storage.update_source_state(source.name, "telegram", newest_id)
+
     return items
 
 
@@ -68,7 +92,13 @@ def main() -> None:
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--sources", default="config/local/sources.yaml")
     parser.add_argument("--source-limit", type=int, default=DEFAULT_SOURCE_LIMIT, help="maximum recent items inspected per source (default: 150)")
+    parser.add_argument(
+        "--reprocess",
+        action="store_true",
+        help="ignore Telegram source state and inspect the latest --source-limit messages from every Telegram source",
+    )
     args = parser.parse_args()
+
     if args.source_limit < 1:
         parser.error("--source-limit must be positive")
 
@@ -78,18 +108,29 @@ def main() -> None:
 
     with SQLiteStorage("news.db") as news_storage:
         rss_items = collect_rss(config, args.source_limit)
-        telegram_items = asyncio.run(collect_telegram(config, news_storage, args.source_limit))
+        telegram_items = asyncio.run(
+            collect_telegram(
+                config,
+                news_storage,
+                args.source_limit,
+                reprocess=args.reprocess,
+            )
+        )
         items = rss_items + telegram_items
-        news_storage.save_many(items)
+        inserted = news_storage.save_many(items)
 
     repository = EventRepository("events.db")
     event_pipeline = EventIntelligencePipeline(repository)
-    accepted, processed, _ = process_items(items, llm, event_pipeline)
+    accepted, processed, stats = process_items(items, llm, event_pipeline)
     events = repository.list_recent(100)
     feed = IntelligenceFeedBuilder().build(events, Path(args.output_dir))
 
     print(f"Collected: {len(items)}")
+    print(f"Newly stored: {inserted}")
     print(f"Accepted claims: {accepted}")
+    print(f"Rejected by gate: {stats['rejected']}")
+    print(f"No event extracted: {stats['no_event']}")
+    print(f"LLM errors: {stats['llm_error']}")
     print(f"Events created/merged: {processed}")
     print(feed.report)
     print(f"Map: {feed.map_path}")
